@@ -16,7 +16,7 @@ class NoteRead(BaseModel):
     updated_at: datetime
 
     class Config:
-        from_attributes = True
+        orm_mode = True
 
 
 class NotePatch(BaseModel):
@@ -36,11 +36,9 @@ class ActionItemRead(BaseModel):
     updated_at: datetime
 
     class Config:
-        from_attributes = True
+        orm_mode = True
 
 
 class ActionItemPatch(BaseModel):
     description: str | None = None
     completed: bool | None = None
-
-
