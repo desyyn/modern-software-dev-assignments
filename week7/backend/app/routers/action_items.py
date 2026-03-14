@@ -19,54 +19,99 @@ def list_items(
     limit: int = Query(50, le=200),
     sort: str = Query("-created_at"),
 ) -> list[ActionItemRead]:
+
     stmt = select(ActionItem)
+
     if completed is not None:
         stmt = stmt.where(ActionItem.completed.is_(completed))
 
     sort_field = sort.lstrip("-")
     order_fn = desc if sort.startswith("-") else asc
+
     if hasattr(ActionItem, sort_field):
         stmt = stmt.order_by(order_fn(getattr(ActionItem, sort_field)))
     else:
         stmt = stmt.order_by(desc(ActionItem.created_at))
 
     rows = db.execute(stmt.offset(skip).limit(limit)).scalars().all()
-    return [ActionItemRead.model_validate(row) for row in rows]
+
+    return [ActionItemRead.from_orm(row) for row in rows]
+
+
+@router.get("/{item_id}", response_model=ActionItemRead)
+def get_item(item_id: int, db: Session = Depends(get_db)) -> ActionItemRead:
+
+    item = db.get(ActionItem, item_id)
+
+    if not item:
+        raise HTTPException(status_code=404, detail="Action item not found")
+
+    return ActionItemRead.from_orm(item)
 
 
 @router.post("/", response_model=ActionItemRead, status_code=201)
 def create_item(payload: ActionItemCreate, db: Session = Depends(get_db)) -> ActionItemRead:
-    item = ActionItem(description=payload.description, completed=False)
+
+    # validation
+    if not payload.description or payload.description.strip() == "":
+        raise HTTPException(status_code=400, detail="Description cannot be empty")
+
+    item = ActionItem(description=payload.description.strip(), completed=False)
+
     db.add(item)
     db.flush()
     db.refresh(item)
-    return ActionItemRead.model_validate(item)
+
+    return ActionItemRead.from_orm(item)
 
 
 @router.put("/{item_id}/complete", response_model=ActionItemRead)
 def complete_item(item_id: int, db: Session = Depends(get_db)) -> ActionItemRead:
+
     item = db.get(ActionItem, item_id)
+
     if not item:
         raise HTTPException(status_code=404, detail="Action item not found")
+
     item.completed = True
+
     db.add(item)
     db.flush()
     db.refresh(item)
-    return ActionItemRead.model_validate(item)
+
+    return ActionItemRead.from_orm(item)
 
 
 @router.patch("/{item_id}", response_model=ActionItemRead)
 def patch_item(item_id: int, payload: ActionItemPatch, db: Session = Depends(get_db)) -> ActionItemRead:
+
     item = db.get(ActionItem, item_id)
+
     if not item:
         raise HTTPException(status_code=404, detail="Action item not found")
+
     if payload.description is not None:
-        item.description = payload.description
+        if payload.description.strip() == "":
+            raise HTTPException(status_code=400, detail="Description cannot be empty")
+        item.description = payload.description.strip()
+
     if payload.completed is not None:
         item.completed = payload.completed
+
     db.add(item)
     db.flush()
     db.refresh(item)
-    return ActionItemRead.model_validate(item)
+
+    return ActionItemRead.from_orm(item)
 
 
+@router.delete("/{item_id}", status_code=204)
+def delete_item(item_id: int, db: Session = Depends(get_db)):
+
+    item = db.get(ActionItem, item_id)
+
+    if not item:
+        raise HTTPException(status_code=404, detail="Action item not found")
+
+    db.delete(item)
+    db.commit()
