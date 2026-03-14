@@ -22,4 +22,29 @@ def test_create_list_and_patch_notes(client):
     patched = r.json()
     assert patched["title"] == "Updated"
 
+def test_notes_pagination(client):
+    # create multiple notes
+    for i in range(5):
+        client.post("/notes/", json={"title": f"Note {i}", "content": "Test"})
+
+    # request with pagination
+    r = client.get("/notes/?skip=0&limit=2")
+
+    assert r.status_code == 200
+    data = r.json()
+
+    assert len(data) == 2
+
+
+def test_notes_sorting(client):
+    client.post("/notes/", json={"title": "B", "content": "Test"})
+    client.post("/notes/", json={"title": "A", "content": "Test"})
+
+    r = client.get("/notes/?sort=title")
+
+    assert r.status_code == 200
+    data = r.json()
+
+    assert data[0]["title"] == "A"
+
 
